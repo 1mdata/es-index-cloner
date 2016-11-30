@@ -70,12 +70,8 @@ class IndexCloner(object):
 
 
     def _copy_data(self):
-        #mappings_types = self._get_mappings()['mappings'].keys()
-        sids = []
-        #for doc_type in mappings_types:
         scroll = self.source_es.search(index=self.source_index,scroll='1m',search_type='scan',size=self.bulk_size,timeout='60s')
         sid = scroll['_scroll_id']
-        sids += sid
         total_size = scroll['hits']['total']
         hits_size = total_size
         dealt_size = 0
@@ -99,12 +95,10 @@ class IndexCloner(object):
             self.target_es.indices.refresh(index=self.target_index)
             # dealt size
             dealt_size += hits_size
-            #print("dealt size: " + str(dealt_size))
             bar.goto(dealt_size)
 
         # clear scroll 
-        # print(sids)
-        self.source_es.clear_scroll(scroll_id=sids)
+        # self.source_es.clear_scroll(scroll_id=sid,body=str(sid))
 
 
 if __name__ == '__main__':
