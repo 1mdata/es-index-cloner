@@ -73,7 +73,7 @@ class IndexCloner(object):
         hits_size = total_size
         dealt_size = 0
         print("docs: " + str(total_size))
-        suffix = '%(percent)d%% [%(elapsed_td)s / %(eta_td)s]'
+        suffix = '%(percent)d%% - %(index)d [%(elapsed_td)s / %(eta_td)s]'
         bar = ShadyBar("clone",suffix=suffix,max=total_size)
         while (hits_size > 0):
             scroll = self.es.scroll(scroll_id=sid,scroll='1m')
