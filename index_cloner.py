@@ -11,7 +11,7 @@ class IndexCloner(object):
         self.shard_count = shard_count
         self.replica_count = replica_count
         self.bulk_size = bulk_size
-        self.es = Elasticsearch([es_ip_port],
+        self.es = Elasticsearch(es_ip_port.split(','),
                 connection_class=es_connection.RequestsHttpConnection,
                 sniff_on_start=True,
                 sniff_on_connection_fail=True,
