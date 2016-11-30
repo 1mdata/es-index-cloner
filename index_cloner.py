@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import argparse
 from progress.bar import ShadyBar
 from elasticsearch import Elasticsearch,connection as es_connection
