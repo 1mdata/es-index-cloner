@@ -129,21 +129,24 @@ class IndexCloner(object):
             hits = scroll['hits']['hits']
             hits_size = len(hits)
             actions = self._bulk_hits(hits)
-            kw = {}
-            kw['timeout'] = '60s'
-            res = []
             if (len(actions)>0):
+                kw = {}
+                kw['timeout'] = '60s'
+                res = []
                 try:
                     res = streaming_bulk(client=self.target_es,actions=actions,**kw)
                 except BulkIndexError as err:
                     print(err)
                     pass
-                 
+                okNum = 0 
                 for ok,re in res:
                     if not ok:
                         print(re)
+                    else:
+                        okNum+=1
                 # refresh index
-                self.target_es.indices.refresh(index=self.target_index)
+                if (okNum>0):
+                    self.target_es.indices.refresh(index=self.target_index)
             # dealt size
             dealt_size += hits_size
             bar.goto(dealt_size)
