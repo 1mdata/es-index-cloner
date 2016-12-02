@@ -116,6 +116,9 @@ class IndexCloner(object):
 
     def _copy_data(self):
         ss_kw = {}
+        # sort
+        if self.source_sort:
+            ss_kw['sort'] = self.source_sort
         scroll = self.source_es.search(index=self.source_index,scroll='1m',search_type='scan',size=self.bulk_size,version=True,timeout='60s',**ss_kw)
         sid = scroll['_scroll_id']
         total_size = scroll['hits']['total']
