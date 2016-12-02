@@ -50,49 +50,58 @@ class IndexCloner(object):
         r = self.source_es.indices.get_mapping(index=self.source_index) 
         source_mappings = r
         return source_mappings[self.source_index]
- 
-    def _bulk_hits(self,hits):
+    
+    # compile hits to bulk action and mget body
+    def _compile_hits_bulk_and_mget(self,hits):
+        mget_docs = []
+        bulk_actions = []
         hit = None
         for hit in hits:
-            doc_id = hit['_id']
-            doc_type = hit['_type']
-            doc_version = hit['_version']
+            doc_id = hit.get('_id')
+            doc_type = hit.get('_type')
+            doc_version = hit.get('_version')
             doc_parent = hit.get('_parent')
             doc_routing = hit.get('_routing')
             
-            document_action = {
-                "_index": self.target_index,
-                "_type": doc_type,
-                "_id": doc_id,
-                "_source": hit['_source']
-            }
-            target_get_doc_kw = {}
+            doc = {}
+            doc['_index'] = self.target_index
+            doc['_type'] = hit.get('_type')
+            doc['_id'] = hit.get('_id')
+            
             if doc_parent:
-                document_action["_parent"] = doc_parent
-                target_get_doc_kw['parent'] = doc_parent
-            
+                doc['_parent'] = doc_parent
             if doc_routing:
-                document_action["_routing"] = doc_routing
-                target_get_doc_kw['routing'] = doc_routing
+                doc['_routing'] = doc_routing
             
-            modified = True
-            if self.target_index_is_old:
-                " check document "
-                try:
-                    target_document = self.target_es.get(index=self.target_index,doc_type=doc_type,id=doc_id,ignore=[404],**target_get_doc_kw)
-                    found = target_document['found']
-                    if(found==True):
-                        target_version = target_document.get('_version')
-                        # check target version >= source version
-                        if (target_version >= doc_version):
-                            modified = False
-                        # print(target_document)
-                except TransportError as err:
-                    pass
-            # new or modified    
-            if modified:
-                yield document_action
+            action = doc.copy()
+            doc['_source'] = False
+            action['_source'] = hit.get('_source')
+            action['_version'] = doc_version
+            mget_docs.append(doc)
+            bulk_actions.append(action)
+        return (bulk_actions,mget_docs)
 
+    
+    def _bulk_hits(self,hits):
+        actions,docs = self._compile_hits_bulk_and_mget(hits)
+        mget = self.target_es.mget(body={"docs":docs},index=self.target_index,_source=False,ignore=[404])
+        docs = mget.get('docs')
+        if docs:
+            docs = list(filter(lambda x:x.get('found') == True, docs)) #[x for x in docs if x.get('found') == True]
+            no_modify = [ y for y in actions for x in docs if x.get('_id') == y.get('_id') and x.get('_version')>=y.get('_version') ]
+            cleanly = []
+            for a in actions:
+                exclude = False
+                for e in no_modify:
+                    if ( a.get('_id') == e.get('_id') ):
+                        exclude = True
+                        break
+                if (exclude == False):
+                    del a['_version']
+                    cleanly.append(a)
+            actions = cleanly
+            #print(len(cleanly))
+        return actions
 
     def _copy_data(self):
         scroll = self.source_es.search(index=self.source_index,scroll='1m',search_type='scan',size=self.bulk_size,version=True,timeout='60s')
@@ -112,20 +121,22 @@ class IndexCloner(object):
             kw = {}
             kw['timeout'] = '60s'
             res = []
-            try:
-                res = streaming_bulk(client=self.target_es,actions=actions,**kw)
-            except BulkIndexError as err:
-                print(err)
-                pass
-           
-            for ok,re in res:
-                if not ok:
-                    print(re)
-            # refresh index
-            self.target_es.indices.refresh(index=self.target_index)
+            if (len(actions)>0):
+                try:
+                    res = streaming_bulk(client=self.target_es,actions=actions,**kw)
+                except BulkIndexError as err:
+                    print(err)
+                    pass
+                 
+                for ok,re in res:
+                    if not ok:
+                        print(re)
+                # refresh index
+                self.target_es.indices.refresh(index=self.target_index)
             # dealt size
             dealt_size += hits_size
             bar.goto(dealt_size)
+        
         print('\nDone !')
         # clear scroll 
         # self.source_es.clear_scroll(scroll_id=sid,body=str(sid))
