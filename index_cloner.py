@@ -99,18 +99,16 @@ class IndexCloner(object):
         mget = self.target_es.mget(body={"docs":docs},index=self.target_index,_source=False,ignore=[404])
         docs = mget.get('docs')
         if docs:
-            docs = list(filter(lambda x:x.get('found') == True, docs)) #[x for x in docs if x.get('found') == True]
-            no_modify = [ y for y in actions for x in docs if x.get('_id') == y.get('_id') and x.get('_version')>=y.get('_version') ]
             cleanly = []
-            for a in actions:
+            for action in actions:
                 exclude = False
-                for e in no_modify:
-                    if ( a.get('_id') == e.get('_id') ):
+                for doc in docs:
+                    if ( doc.get('found') == True and action.get('_type') == doc.get('_type') and action.get('_id') == doc.get('_id') and action.get('_version') <= doc.get('_version') ):
                         exclude = True
                         break
                 if (exclude == False):
-                    del a['_version']
-                    cleanly.append(a)
+                    del action['_version']
+                    cleanly.append(action)
             actions = cleanly
             #print(len(cleanly))
         return actions
