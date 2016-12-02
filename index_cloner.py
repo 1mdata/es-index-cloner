@@ -2,6 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import logging
+import logging.config
+
+LOG_FILE = "cloner.log"
+
 from progress.bar import ShadyBar
 from elasticsearch import Elasticsearch,connection as es_connection
 from elasticsearch.helpers import streaming_bulk,BulkIndexError
@@ -14,7 +19,14 @@ class IndexCloner(object):
         self.shard_count = shard_count
         self.replica_count = replica_count
         self.bulk_size = bulk_size
-        
+
+        self.logger = logging.getLogger("IndexCloner")
+        self.logger.setLevel(logging.INFO)
+        formatter = logging.Formatter("%(asctime)s - %(message)s");
+        handler = logging.handlers.RotatingFileHandler(LOG_FILE,maxBytes=4096,backupCount=1)
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+
         if(target_es_ip_port.strip()==''):
                 target_es_ip_port = source_es_ip_port
 
@@ -110,6 +122,7 @@ class IndexCloner(object):
         hits_size = total_size
         dealt_size = 0
         print("docs: " + str(total_size))
+        self.logger.info("docs: "+ str(total_size))
         suffix = '%(percent)d%% - %(index)d [%(elapsed_td)s / %(eta_td)s]'
         bar = ShadyBar("clone",suffix=suffix,max=total_size)
         while (hits_size > 0):
@@ -136,8 +149,9 @@ class IndexCloner(object):
             # dealt size
             dealt_size += hits_size
             bar.goto(dealt_size)
-        
+            self.logger.info("dealt: "+str(dealt_size) +" / "+ str(total_size))
         print('\nDone !')
+        self.logger.info("Done ! \n\n")
         # clear scroll 
         # self.source_es.clear_scroll(scroll_id=sid,body=str(sid))
 
@@ -153,6 +167,9 @@ if __name__ == '__main__':
     parser.add_argument('-b', action="store", dest='bulk_size', default=100, help="bulk size - default(100)")
 
     arguments = parser.parse_args()
-
-    IndexCloner(arguments.source_index, arguments.target_index, arguments.source_es_server,arguments.target_es_server, arguments.primary_shards,
+    try:
+        IndexCloner(arguments.source_index, arguments.target_index, arguments.source_es_server,arguments.target_es_server, arguments.primary_shards,
                 arguments.replica_shards,arguments.bulk_size).clone()
+    except Exception as err:
+        print(err)
+        pass
