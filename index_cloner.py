@@ -13,8 +13,9 @@ from elasticsearch.helpers import streaming_bulk,BulkIndexError
 from elasticsearch.exceptions import *
 
 class IndexCloner(object):
-    def __init__(self, source_index, target_index, source_es_ip_port,target_es_ip_port, shard_count, replica_count,bulk_size):
+    def __init__(self, source_index, target_index, source_es_ip_port,target_es_ip_port, shard_count, replica_count,bulk_size,source_sort):
         self.source_index = source_index
+        self.source_sort = source_sort
         self.target_index = target_index
         self.shard_count = shard_count
         self.replica_count = replica_count
@@ -114,7 +115,8 @@ class IndexCloner(object):
         return actions
 
     def _copy_data(self):
-        scroll = self.source_es.search(index=self.source_index,scroll='1m',search_type='scan',size=self.bulk_size,version=True,timeout='60s')
+        ss_kw = {}
+        scroll = self.source_es.search(index=self.source_index,scroll='1m',search_type='scan',size=self.bulk_size,version=True,timeout='60s',**ss_kw)
         sid = scroll['_scroll_id']
         total_size = scroll['hits']['total']
         hits_size = total_size
@@ -166,11 +168,12 @@ if __name__ == '__main__':
     parser.add_argument('-p', action="store", dest='primary_shards', default=3, help="primary shards in target index - default(3)")
     parser.add_argument('-r', action="store", dest='replica_shards', default=0, help="replica shards in target index - default(0)")
     parser.add_argument('-b', action="store", dest='bulk_size', default=100, help="bulk size - default(100)")
+    parser.add_argument('-ss', action="store", dest='source_sort', default="", help="Search source index sort <field>:<direction>(asc|desc) - default()")
 
     arguments = parser.parse_args()
     try:
         IndexCloner(arguments.source_index, arguments.target_index, arguments.source_es_server,arguments.target_es_server, arguments.primary_shards,
-                arguments.replica_shards,arguments.bulk_size).clone()
+                arguments.replica_shards,arguments.bulk_size,arguments.source_sort).clone()
     except Exception as err:
         print(err)
         pass
