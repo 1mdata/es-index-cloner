@@ -1,0 +1,46 @@
+# 每批处理数目，真实数码需要 乘以 es 索引分片数目
+bulk_size: 100
+
+
+# mysql 配置
+mysql:
+  # mysql 链接字符
+  uri:
+  bulk_size: 100
+  # sql 查询语句
+  query: select * from
+  # 需要存在 es 中的 source_field 
+  in_field: historyId
+
+
+# mongodb 配置
+mongo:
+  uri: mongodb://192.168.9.12:27017/
+  db: doc_pool
+
+
+# elastic 配置
+elastic:
+  bulk_size: 100
+  index: doc_pool
+  # ES 服务起
+  host:
+    - host: 192.168.9.2
+      port: 9200
+    - host: 192.168.9.2
+      port: 9200
+  # 需要更新 type
+  update_type: patient_medical_history
+  # 需要更新 es 中的索引
+  update_field:
+    # 主要诊断
+    - patientMedicalHistoryMainDiagnoseAll
+    # 其他诊断
+    - patientMedicalHistoryOtherDiagnoseAll
+  # 需要取出的字段,用于做 sql 的条件
+  source_field:
+    # 病史Id
+    - historyId
+  query_type: doc_info
+  # es 的查询条件 DSL
+  query:
