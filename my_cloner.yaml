@@ -14,23 +14,34 @@ mysql:
     db: 'emdata_hexbug_dev'
   bulk_size: 100
   # sql 查询语句
-  query: select login_user_id as loginUserId from pr_patient_basic_info where 1=1
+  query: >
+    SELECT id,id AS oldHistoryId,
+    fun_MainDiagnoseAll(id) AS patientMedicalHistoryMainDiagnoseAll,
+    fun_MainDiagnose(id) AS patientMedicalHistoryMainDiagnose,
+    fun_MainDiagnoseSub(id) AS patientMedicalHistoryMainDiagnoseSub,
+    fun_OtherDiagnoseAll(id) AS patientMedicalHistoryOtherDiagnoseAll,
+    fun_OtherDiagnose(id) AS patientMedicalHistoryOtherDiagnose,
+    fun_OtherDiagnoseSub(id) AS patientMedicalHistoryOtherDiagnoseSub
+    FROM pr_patient_medical_history WHERE 1=1
   # 需要存在 es 中的 source_field 
-  in_field: loginUserId
-  where_field: login_user_id
+  update_type: patient_medical_history
+  where_field_in_es: oldHistoryId
+  where_field: id
 
 
 # mongodb 配置
 mongo:
   uri: mongodb://192.168.9.12:27017/
   db: doc_pool
-  in_field: historyId
+  update_type: patient_medical_history
+  where_field: historyId
+  where_field_in_es: historyId
 
 
 # elastic 配置
 elastic:
   bulk_size: 100
-  index: doc_pool_v1_2016_11_8
+  index: doc_pool
   # ES 服务起
   host:
     - host: 192.168.9.2
@@ -41,14 +52,17 @@ elastic:
   update_field:
     # 主要诊断
     - patientMedicalHistoryMainDiagnoseAll
+    - patientMedicalHistoryMainDiagnose
+    - patientMedicalHistoryMainDiagnoseSub
     # 其他诊断
     - patientMedicalHistoryOtherDiagnoseAll
+    - patientMedicalHistoryOtherDiagnose
+    - patientMedicalHistoryOtherDiagnoseSub
   # 需要取出的字段,用于做 sql 的条件
   source_field:
     # 病史Id
     - historyId
-    - diseaseId
-    - loginUserId
+    - oldHistoryId
   query_type: doc_info
   # es 的查询条件 DSL
   query:
