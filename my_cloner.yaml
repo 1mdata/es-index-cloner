@@ -6,27 +6,33 @@ bulk_size: 100
 mysql:
   # mysql 链接字符
   uri:
+    host: 192.168.9.100
+    port: 3306
+    user: root
+    password: emdata2015
+    charset: 'utf8'
+    db: 'emdata_hexbug_dev'
   bulk_size: 100
   # sql 查询语句
-  query: select * from
+  query: select login_user_id as loginUserId from pr_patient_basic_info where 1=1
   # 需要存在 es 中的 source_field 
-  in_field: historyId
+  in_field: loginUserId
+  where_field: login_user_id
 
 
 # mongodb 配置
 mongo:
   uri: mongodb://192.168.9.12:27017/
   db: doc_pool
+  in_field: historyId
 
 
 # elastic 配置
 elastic:
   bulk_size: 100
-  index: doc_pool
+  index: doc_pool_v1_2016_11_8
   # ES 服务起
   host:
-    - host: 192.168.9.2
-      port: 9200
     - host: 192.168.9.2
       port: 9200
   # 需要更新 type
@@ -41,6 +47,8 @@ elastic:
   source_field:
     # 病史Id
     - historyId
+    - diseaseId
+    - loginUserId
   query_type: doc_info
   # es 的查询条件 DSL
   query:

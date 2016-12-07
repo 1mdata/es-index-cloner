@@ -25,11 +25,13 @@ class MyCloner(object):
 
         self.mongo_client = MongoClient(config['mongo']['uri'])
         self.mongo_db = self.mongo_client[config['mongo']['db']]
+        self.mongo_in_field = config['mongo']['in_field']
         
         self.mysql_uri = config['mysql']['uri']
         self.sql_query = config['mysql']['query']
         self.sql_bulk_size = config['mysql']['bulk_size']
         self.sql_in_field = config['mysql']['in_field']
+        self.sql_where_field = config['mysql']['where_field']
 
         kw = {
             "sniff_on_start":True,
@@ -59,6 +61,7 @@ class MyCloner(object):
     def _update_with_es(self):
         kw={
             'index': self.es_index,
+            'doc_type': self.query_type,
             'scroll': '1m',
             'search_type': 'scan',
             'size': self.bulk_size
@@ -78,6 +81,7 @@ class MyCloner(object):
             hits_size = len(hits)
             # todo
             res = self._bulk_es_mongo(hits)
+            print(len(res))
             #
             # dealt size
             dealt_size += hits_size
@@ -87,11 +91,11 @@ class MyCloner(object):
 
     def _build_sql(self,hits):
         inIds = [ y['_source'][self.sql_in_field] for y in hits if y.get('_source')]
-        sql = '%s AND %s IN (%s)' % (self.sql_query,self.sql_in_field,','.join(inIds))
+        sql = '%s AND %s IN (%s)' % (self.sql_query,self.sql_where_field,','.join(str(i) for i in inIds))
         return [(sql,inIds)]
 
     def _query_sql(self,sql):
-        connection = pymysql.connect(self.mysql_uri)
+        connection = pymysql.connect(cursorclass=pymysql.cursors.DictCursor,**self.mysql_uri)
         try:
             with connection.cursor() as cursor:
                 cursor.execute(sql)
@@ -103,7 +107,7 @@ class MyCloner(object):
     def _compile_es_hits(self,hits):
         def _find_hits(inid):
             #docs = list(filter(lambda x:x.get('_source') and x.get('_source')[self.sql_in_field] == inid, hits))
-            docs = [ x for x in hits if y.get('_source') and y.get('_srouce')[self.sql_in_field] == inid ]
+            docs = [ x for x in hits if x.get('_source') and x.get('_source')[self.sql_in_field] == inid ]
             return docs
         sqls = self._build_sql(hits)
         news = []
@@ -113,17 +117,51 @@ class MyCloner(object):
                 inid = re[self.sql_in_field]
                 docs = _find_hits(inid)
                 for doc in docs:
+                    hits.remove(doc)
                     for field in self.update_field:
-                        doc[field] = re.get(field)
+                        doc['_source'][field] = re.get(field)
                     news.append(doc)
-
+        #print(len(news))
         return news
+    def _build_hits_update_bulk_es_and_mongo(self,hits):
+        bulk_actions = []
+        bulk_mongo = []
+        for hit in hits:
+            doc_id = hit.get('_id')
+            doc_type = hit.get('_type')
+            doc_version = hit.get('_version')
+            doc_parent = hit.get('_parent')
+            doc_routing = hit.get('_routing')
+
+            doc = {}
+            doc['_index'] = self.es_index
+            doc['_type'] = doc_type
+            doc['_id'] = doc_id
+
+            if doc_parent:
+                doc['_parent'] = doc_parent
+            if doc_routing:
+                doc['_routing'] = doc_routing
+
+            action = doc.copy()
+            action['_source'] = hit.get('_source')
+            mongo_filter = {}
+            mongo_filter[self.mongo_in_field] = hit.get('_source')[self.mongo_in_field]
+            mongo_set = {}
+            mongo_set['$set'] = hit.get('_source')
+            bulk_mongo.append((mongo_filter,mongo_set))
+            bulk_actions.append(action)
+        return (bulk_actions,bulk_mongo)
 
     # 根据从 es 中获取到的数据执行查询 mysql ，并作出更新操作
     def _bulk_es_mongo(self,hits):
         hits = self._compile_es_hits(hits)
-
-        pass
+        actions,mongo = self._build_hits_update_bulk_es_and_mongo(hits)
+        # 1, update es
+        kw = {}
+        #res = streaming_bulk(client=self.es,actions=actions,**kw)
+        # 2, update mongo
+        return actions
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Update part field from mysql to es and mongodb")
@@ -132,4 +170,4 @@ if __name__ == '__main__':
     arguments = parser.parse_args()
     
     config = yaml.load(open(arguments.yaml_file))
-    MyCloner(config)
+    MyCloner(config).update()
