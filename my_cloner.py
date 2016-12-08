@@ -56,12 +56,14 @@ class MyCloner(object):
         self._update_with_es()
 
     def _bulk_update_mongo(self,bulks):
-        collection = self.mongo_db[self.mongo_update_type]
-        bulk = collection.initialize_ordered_bulk_op()
-        for key,find,update in bulks:
-            bulk.find(find).update(update)
-        res = bulk.execute()
-        return res
+        if (len(bulks)>0):
+            collection = self.mongo_db[self.mongo_update_type]
+            bulk = collection.initialize_ordered_bulk_op()
+            for key,find,update in bulks:
+                bulk.find(find).update(update)
+            res = bulk.execute()
+            return res
+        return 0
 
     # 直接从 mysql 更新
     def _update_with_sql(self):
@@ -101,7 +103,7 @@ class MyCloner(object):
     def _build_sql(self,hits):
         inIds = [ y['_source'][self.sql_where_field_in_es] for y in hits if y.get('_source')]
         if (len(inIds)>0):
-            sql = '%s AND %s IN (%s)' % (self.sql_query,self.sql_where_field,','.join(str(i) for i in inIds))
+            sql = '%s AND %s IN (%s)' % (self.sql_query,self.sql_where_field,','.join(str(i) for i in inIds if str(i).isnumeric()))
         else:
             sql = self.sql_query
         # print(sql)
@@ -114,6 +116,8 @@ class MyCloner(object):
                 cursor.execute(sql)
                 result = cursor.fetchall()
                 return result
+        except:
+            print(sql)
         finally:
             connection.close()
     # 处理 es 结果为需要更新的数据
