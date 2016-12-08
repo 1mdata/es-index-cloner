@@ -201,7 +201,7 @@ class MyCloner(object):
                     okNum+=1
             if (okNum>0):
                 self.es.indices.refresh(index=self.es_index)
-        except 
+        except: 
             pass
         # 2, update mongo
         res = self._bulk_update_mongo(mongo)
