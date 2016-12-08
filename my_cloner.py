@@ -111,15 +111,16 @@ class MyCloner(object):
 
     def _query_sql(self,sql):
         connection = pymysql.connect(cursorclass=pymysql.cursors.DictCursor,**self.mysql_uri)
+        res = []
         try:
             with connection.cursor() as cursor:
                 cursor.execute(sql)
-                result = cursor.fetchall()
-                return result
+                res = cursor.fetchall()
         except:
             print(sql)
         finally:
             connection.close()
+            return res
     # 处理 es 结果为需要更新的数据
     def _compile_es_hits(self,hits):
         def _find_hits(inid):
@@ -201,8 +202,8 @@ class MyCloner(object):
                     okNum+=1
             if (okNum>0):
                 self.es.indices.refresh(index=self.es_index)
-        except: 
-            pass
+        except:
+            print(actions)
         # 2, update mongo
         res = self._bulk_update_mongo(mongo)
         #print(res)
