@@ -190,16 +190,19 @@ class MyCloner(object):
         }
         #print(actions)
         #print(mongo)
-        res = streaming_bulk(client=self.es,actions=actions,**kw)
-        #print(res)
-        okNum = 0
-        for ok,re in res:
-            if not ok:
-                print(re)
-            else:
-                okNum+=1
-        if (okNum>0):
-            self.es.indices.refresh(index=self.es_index)
+        try:
+            res = streaming_bulk(client=self.es,actions=actions,**kw)
+            #print(res)
+            okNum = 0
+            for ok,re in res:
+                if not ok:
+                    print(re)
+                else:
+                    okNum+=1
+            if (okNum>0):
+                self.es.indices.refresh(index=self.es_index)
+        except 
+            pass
         # 2, update mongo
         res = self._bulk_update_mongo(mongo)
         #print(res)
