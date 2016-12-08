@@ -48,6 +48,7 @@ elastic:
       port: 9200
   # 需要更新 type
   update_type: patient_medical_history
+  update_id_in_source: historyId
   # 需要更新 es 中的索引
   update_field:
     # 主要诊断

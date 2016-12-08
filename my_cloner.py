@@ -11,7 +11,7 @@ import yaml
 # es
 from progress.bar import ShadyBar
 from elasticsearch import Elasticsearch,connection as es_connection
-from elasticsearch.helpers import streaming_bulk,BulkIndexError
+from elasticsearch.helpers import bulk,streaming_bulk,BulkIndexError
 
 # MongoDB
 from pymongo import MongoClient
@@ -42,6 +42,7 @@ class MyCloner(object):
         }
         self.update_type = config['elastic']['update_type']
         self.update_field = config['elastic']['update_field']
+        self.update_id_in_source = config['elastic']['update_id_in_source']
         self.source_field = config['elastic']['source_field']
         self.query_type = config['elastic']['query_type']
         self.query = config['elastic']['query']
@@ -161,15 +162,18 @@ class MyCloner(object):
                     source[field] = value
             
             action = doc.copy()
-            action['_op_type'] = 'update'
-            action['_type'] = self.es_update_type
-            action['_source'] = source
-            mongo_filter = {}
-            mongo_filter[self.mongo_where_field] = hit.get('_source')[self.mongo_where_field_in_es]
-            mongo_set = {}
-            mongo_set['$set'] = source
-            bulk_mongo.append((self.mongo_update_type,mongo_filter,mongo_set))
-            bulk_actions.append(action)
+            if (hit.get('_source') and hit.get('_source').get(self.update_id_in_source)):
+                action['_id'] = hit.get('_source')[self.update_id_in_source]
+                action['_op_type'] = 'update'
+                action['_type'] = self.update_type
+                action['doc'] = source
+                del action['_parent']
+                mongo_filter = {}
+                mongo_filter[self.mongo_where_field] = hit.get('_source')[self.mongo_where_field_in_es]
+                mongo_set = {}
+                mongo_set['$set'] = source
+                bulk_mongo.append((self.mongo_update_type,mongo_filter,mongo_set))
+                bulk_actions.append(action)
         return (bulk_actions,bulk_mongo)
 
     # 根据从 es 中获取到的数据执行查询 mysql ，并作出更新操作
@@ -177,9 +181,13 @@ class MyCloner(object):
         hits = self._compile_es_hits(hits)
         (actions,mongo) = self._build_hits_update_bulk_es_and_mongo(hits)
         # 1, update es
-        kw = {}
-        print(actions)
+        kw = {
+                "raise_on_exception":False
+        }
+        #print(actions)
+        #print(mongo)
         res = streaming_bulk(client=self.es,actions=actions,**kw)
+        #print(res)
         okNum = 0
         for ok,re in res:
             if not ok:
@@ -189,8 +197,6 @@ class MyCloner(object):
         if (okNum>0):
             self.es.indices.refresh(index=self.es_index)
         # 2, update mongo
-        #print(actions)
-        #print(mongo)
         res = self._bulk_update_mongo(mongo)
         #print(res)
         return actions
